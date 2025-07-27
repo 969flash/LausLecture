@@ -363,7 +363,7 @@ def calculate_total_road_access_length(lot: Lot, road_curves: List[geo.Curve]) -
 def find_flag_lots(
     lots: List[Lot], roads: List[Road], offset_distance: float = 4.0
 ) -> List[Lot]:
-    """자루형 토지와 맹지를 찾아서 반환"""
+    """자루형 토지를 찾아서 반환 (도로 접근 토지만 검사)"""
     flag_lots: List[Lot] = []
 
     # 도로 커브 추출
@@ -372,53 +372,38 @@ def find_flag_lots(
 
     # 도로 바운딩박스 사전 계산
     road_bboxes = create_road_bounding_boxes(road_curves)
-    
+
     # 시간 측정 시작
     start_time = time.time()
-    total_lots = len(lots)
+
+    # 도로에 접한 토지만 필터링 (자루형 토지는 도로에 접해있어야 함)
+    accessible_lots = []
+    print("\n도로 접근성 필터링...")
+    filter_start = time.time()
+
+    for lot in lots:
+        if check_lot_road_access(lot, road_curves, road_bboxes):
+            accessible_lots.append(lot)
+
+    print(
+        f"도로 접근 토지: {len(accessible_lots)}개 / {len(lots)}개 ({time.time() - filter_start:.2f}초)"
+    )
+
+    # 자루형 토지 판별은 도로 접근 토지만 대상으로
+    total_lots = len(accessible_lots)
     processed = 0
 
-    # 각 토지의 도로 접근성 검사
-    for lot in lots:
-        has_access = check_lot_road_access(lot, road_curves, road_bboxes)
+    # 각 도로 접근 토지에 대해 자루형 판별
+    for lot in accessible_lots:
 
-        if not has_access:
-            continue
+        try:
+            # clipper를 사용한 내부 오프셋
+            plane = geo.Plane.WorldXY
+            tolerance = 0.1
 
-        # 오프셋 테스트로 자루형 토지 판별
-        # clipper를 사용한 내부 오프셋
-        plane = geo.Plane.WorldXY
-        tolerance = 0.1
-
-        offset_result = ghcomp.ClipperComponents.PolylineOffset(
-            lot.curve,
-            offset_distance,  # 내부로 오프셋
-            plane,
-            tolerance,
-            2,  # closed_fillet: 2 = miter
-            2,  # open_fillet: 2 = butt
-            1,  # miter limit
-        )
-
-        # 오프셋 결과가 없으면 스킵
-        if not offset_result.holes:
-            continue
-
-        # offset_result.holes을 밖 방향으로 오프셋한 결과 모두 도로와 엑세스가 없는 경우 자루형 토지로판단
-        is_flag_lot = True
-
-        # holes가 리스트인지 단일 커브인지 확인
-        holes_list = []
-        if hasattr(offset_result.holes, "__iter__"):
-            holes_list = list(offset_result.holes)
-        else:
-            holes_list = [offset_result.holes]
-
-        for offset_curve in holes_list:
-            # 다시 외부로 오프셋 (원래 크기로 복원 시도)
-            outward_result = ghcomp.ClipperComponents.PolylineOffset(
-                offset_curve,
-                offset_distance,  # 외부로 오프셋
+            offset_result = ghcomp.ClipperComponents.PolylineOffset(
+                lot.curve,
+                offset_distance,  # 내부로 오프셋
                 plane,
                 tolerance,
                 2,  # closed_fillet: 2 = miter
@@ -426,32 +411,79 @@ def find_flag_lots(
                 1,  # miter limit
             )
 
-            if not outward_result.contour:
+            # 오프셋 결과가 없으면 스킵 (좁은 토지)
+            if not offset_result or not offset_result.holes:
+                processed += 1
                 continue
 
-            # 복원된 커브로 임시 Lot 생성
-            temp_lot = Lot(outward_result.contour, lot.pnu, lot.jimok, lot.record)
+            # 모든 오프셋 커브 확인
+            holes_list = []
+            if hasattr(offset_result.holes, "__iter__"):
+                holes_list = list(offset_result.holes)
+            else:
+                holes_list = [offset_result.holes]
 
-            # 복원된 토지가 도로와 접하는지 확인
-            offset_has_access = check_lot_road_access(
-                temp_lot, road_curves, road_bboxes
-            )
+            # 외부 오프셋으로 복원 후 도로 접근 확인
+            is_flag_lot = True
 
-            # 오프셋 후 도로 접근이 하나라도 있는 경우
-            if offset_has_access:
-                is_flag_lot = False
-                break
+            for offset_curve in holes_list:
+                # 다시 외부로 오프셋
+                outward_result = ghcomp.ClipperComponents.PolylineOffset(
+                    offset_curve,
+                    offset_distance,  # 외부로 오프셋
+                    plane,
+                    tolerance,
+                    2,  # closed_fillet: 2 = miter
+                    2,  # open_fillet: 2 = butt
+                    1,  # miter limit
+                )
 
-        if is_flag_lot:
-            lot.is_flag_lot = True
-            flag_lots.append(lot)
-        
+                if not outward_result or not outward_result.contour:
+                    continue
+
+                # 복원된 커브가 도로와 접하는지 빠른 확인
+                restored_curve = (
+                    outward_result.contour[0]
+                    if hasattr(outward_result.contour, "__getitem__")
+                    else outward_result.contour
+                )
+
+                # 바운딩박스로 빠른 사전 검사
+                restored_bbox = restored_curve.GetBoundingBox(False)
+                restored_bbox.Inflate(0.5)
+
+                # 가능성 있는 도로만 검사
+                has_nearby_road = False
+                for i, road_bbox in enumerate(road_bboxes):
+                    if not (
+                        restored_bbox.Max.X < road_bbox.Min.X
+                        or restored_bbox.Min.X > road_bbox.Max.X
+                        or restored_bbox.Max.Y < road_bbox.Min.Y
+                        or restored_bbox.Min.Y > road_bbox.Max.Y
+                    ):
+                        # 실제 근접성 검사
+                        if check_curve_proximity(restored_curve, road_curves[i], 0.5):
+                            has_nearby_road = True
+                            break
+
+                if has_nearby_road:
+                    is_flag_lot = False
+                    break
+
+            if is_flag_lot:
+                lot.is_flag_lot = True
+                flag_lots.append(lot)
+
+        except Exception as e:
+            # 오프셋 실패시 스킵
+            pass
+
         # 진행률 표시
         processed += 1
         if processed % max(1, total_lots // 10) == 0:
             elapsed = time.time() - start_time
             print(f"  처리 진행: {processed}/{total_lots} ({elapsed:.2f}초)")
-    
+
     # 총 소요 시간
     total_time = time.time() - start_time
     print(f"\n자루형 토지 판별 완료: {total_time:.2f}초")
@@ -463,7 +495,7 @@ def find_flag_lots(
 if __name__ == "__main__":
     # 전체 실행 시간 측정
     total_start = time.time()
-    
+
     # 파일 경로 설정
     shp_path = os.path.join(os.path.dirname(__file__), "test_lots_in_seoul.shp")
 
