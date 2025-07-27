@@ -1,0 +1,53 @@
+[tool.pyright]
+# Rhino Python 타입 힌트 설정
+pythonVersion = "3.9"
+venvPath = "."
+venv = "stub"
+
+extraPaths = [
+    "./stub/RhinoStub",
+    "./stub/RhinoStub/rhino3d-8.19.25132.1001"
+]
+
+# 타입 체크 설정
+typeCheckingMode = "basic"
+useLibraryCodeForTypes = true
+reportMissingImports = false
+reportMissingTypeStubs = false
+
+# Rhino 특정 모듈 설정
+stubPath = "./stub/RhinoStub"
+
+[tool.mypy]
+# MyPy 설정 (선택사항)
+python_version = "3.9"
+mypy_path = "./stub/RhinoStub"
+ignore_missing_imports = true
+no_implicit_optional = true
+check_untyped_defs = true
+
+[tool.pylint]
+# Pylint 설정
+init-hook='import sys; sys.path.append("./stub/RhinoStub")'
+disable = ["import-error", "no-name-in-module"]
+
+[tool.black]
+# 코드 포맷터 설정
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+
+[project]
+name = "lauslecture"
+version = "0.1.0"
+description = "Rhino Python을 활용한 설계 자동화 강의 프로젝트"
+readme = "README.md"
+requires-python = ">=3.9"
+
+[project.optional-dependencies]
+dev = [
+    "pyright",
+    "mypy",
+    "black",
+    "pylint"
+]
