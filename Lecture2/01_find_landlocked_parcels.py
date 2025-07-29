@@ -3,6 +3,7 @@
 import Rhino.Geometry as geo
 import shapefile
 import os
+import time
 from typing import List, Tuple, Any, Optional
 
 
@@ -185,8 +186,8 @@ def create_parcel_from_shape(
     if not boundary or not boundary.IsValid:
         return None
 
-    pnu = get_field_value(record, fields, "PNU")
-    jimok = get_field_value(record, fields, "JIMOK")
+    pnu = get_field_value(record, fields, "A1")  # 구 PNU
+    jimok = get_field_value(record, fields, "A11")  # 구 JIMOK
 
     if jimok == "도로":
         parcel = Road(boundary, pnu, jimok, record, holes)
@@ -328,44 +329,75 @@ def find_landlocked_lots(lots: List[Lot], roads: List[Road]) -> List[Lot]:
 
     # 도로 커브 추출
     road_curves = get_all_road_curves(roads)
-    print(f"\n도로 커브 수: {len(road_curves)}개")
+    print(f"   도로 커브 수: {len(road_curves)}개")
 
     # 도로 바운딩박스 사전 계산
     road_bboxes = create_road_bounding_boxes(road_curves)
 
     # 각 토지의 도로 접근성 검사
+    processed = 0
     for lot in lots:
         has_access = check_lot_road_access(lot, road_curves, road_bboxes)
 
         if not has_access:
             lot.is_landlocked = True
             landlocked_lots.append(lot)
+        
+        # 진행률 표시
+        processed += 1
+        if processed % max(1, len(lots) // 10) == 0:
+            print(f"   처리 진행: {processed}/{len(lots)} ({processed/len(lots)*100:.0f}%)")
 
     return landlocked_lots
 
 
 if __name__ == "__main__":
+    # 전체 실행 시간 측정
+    total_start = time.time()
+    
+    print("=" * 60)
+    print("맹지 찾기")
+    print("=" * 60)
+    
     # 파일 경로 설정
-    shp_path = os.path.join(os.path.dirname(__file__), "test_lots_in_seoul.shp")
+    shp_path = os.path.join(os.path.dirname(__file__), "AL_D194_11680_20250123.shp")
 
     # 1. SHP 파일 읽기
+    print("\n1. SHP 파일 읽기...")
+    start = time.time()
     shapes, records, fields = read_shp_file(shp_path)
+    print(f"   완료: {time.time() - start:.2f}초")
 
-    # 2. shape에서 parcel 객체 생성
+    # 2. Parcel 객체 생성
+    print("\n2. Parcel 객체 생성...")
+    start = time.time()
     parcels = get_parcels_from_shapes(shapes, records, fields)
+    print(f"   완료: {time.time() - start:.2f}초 ({len(parcels)}개 생성)")
 
-    # 3. 필지를 용도별로 분류
+    # 3. 필지 분류
+    print("\n3. 필지 분류...")
+    start = time.time()
     lots, roads = classify_parcels(parcels)
+    print(f"   완료: {time.time() - start:.2f}초")
+    print(f"   대지: {len(lots)}개, 도로: {len(roads)}개")
 
     # 4. 맹지 찾기
+    print("\n4. 맹지 찾기...")
+    start = time.time()
     landlocked_lots = find_landlocked_lots(lots, roads)
+    print(f"   완료: {time.time() - start:.2f}초")
 
     # 결과 출력
-    print(f"\n전체 대지: {len(lots)}개")
+    print(f"\n=== 결과 ===")
+    print(f"전체 대지: {len(lots)}개")
     print(f"맹지: {len(landlocked_lots)}개")
-    print(f"맹지 비율: {len(landlocked_lots)/len(lots)*100:.1f}%")
+    
+    if lots:
+        print(f"맹지 비율: {len(landlocked_lots)/len(lots)*100:.1f}%")
+    
+    print(f"\n총 실행 시간: {time.time() - total_start:.2f}초")
 
-    # 커브만 추출
+    # Grasshopper 출력용 변수
     all_lot_crvs = [lot.curve for lot in lots]
     road_crvs = [road.curve for road in roads]
     landlocked_crvs = [lot.curve for lot in landlocked_lots]
