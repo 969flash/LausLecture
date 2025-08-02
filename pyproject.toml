@@ -6,7 +6,10 @@ venv = "stub"
 
 extraPaths = [
     "./stub/RhinoStub",
-    "./stub/RhinoStub/rhino3d-8.19.25132.1001"
+    "./stub/RhinoStub/rhino3d-8.19.25132.1001",
+    "./stub/RhinoStub/rhino3d-8.19.25132.1001/Rhino",
+    "./stub/RhinoStub/rhino3d-8.19.25132.1001/Rhino/Geometry",
+    "./stub/RhinoStub/rhino3d-8.19.25132.1001/Rhino/Geometry/Intersect"
 ]
 
 # 타입 체크 설정
@@ -14,9 +17,10 @@ typeCheckingMode = "basic"
 useLibraryCodeForTypes = true
 reportMissingImports = false
 reportMissingTypeStubs = false
+reportMissingModuleSource = false
 
 # Rhino 특정 모듈 설정
-stubPath = "./stub/RhinoStub"
+stubPath = "./stub/RhinoStub/rhino3d-8.19.25132.1001"
 
 [tool.mypy]
 # MyPy 설정 (선택사항)
