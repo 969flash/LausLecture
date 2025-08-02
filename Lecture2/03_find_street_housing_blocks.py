@@ -13,47 +13,47 @@ class Parcel:
 
     def __init__(
         self,
-        curve: geo.Curve,
+        region: geo.Curve,
         pnu: str,
         jimok: str,
         record: List[Any],
-        holes: List[geo.Curve] = None,
+        hole_regions: List[geo.Curve] = None,
     ):
-        self.curve = curve  # 외부 경계 커브
-        self.holes = holes if holes is not None else []  # 내부 구멍들
+        self.region = region  # 외부 경계 커브
+        self.hole_regions = hole_regions if hole_regions is not None else []  # 내부 구멍들
         self.pnu = pnu
         self.jimok = jimok
         self.record = record
 
     def preprocess_curve(self) -> bool:
         """커브 전처리 (invalid 제거, 자체교차 제거, 단순화)"""
-        if not self.curve or not self.curve.IsValid:
+        if not self.region or not self.region.IsValid:
             return False
 
         # 자체교차 확인
-        intersection_events = geo.Intersect.Intersection.CurveSelf(self.curve, 0.001)
+        intersection_events = geo.Intersect.Intersection.CurveSelf(self.region, 0.001)
         if intersection_events:
-            simplified = self.curve.Simplify(geo.CurveSimplifyOptions.All, 0.1, 1.0)
+            simplified = self.region.Simplify(geo.CurveSimplifyOptions.All, 0.1, 1.0)
             if simplified:
-                self.curve = simplified
+                self.region = simplified
             else:
                 return False
 
         # 일반 단순화
-        simplified = self.curve.Simplify(geo.CurveSimplifyOptions.All, 0.1, 1.0)
+        simplified = self.region.Simplify(geo.CurveSimplifyOptions.All, 0.1, 1.0)
         if simplified:
-            self.curve = simplified
+            self.region = simplified
 
         # 내부 구멍들도 처리
-        valid_holes = []
-        for hole in self.holes:
+        valid_hole_regions = []
+        for hole in self.hole_regions:
             if hole and hole.IsValid:
                 simplified_hole = hole.Simplify(geo.CurveSimplifyOptions.All, 0.1, 1.0)
                 if simplified_hole:
-                    valid_holes.append(simplified_hole)
+                    valid_hole_regions.append(simplified_hole)
                 else:
-                    valid_holes.append(hole)
-        self.holes = valid_holes
+                    valid_hole_regions.append(hole)
+        self.hole_regions = valid_hole_regions
 
         return True
 
@@ -73,8 +73,8 @@ class Lot(Parcel):
 class Block:
     """블록 클래스 - 여러 필지가 합쳐진 단위"""
 
-    def __init__(self, curve: geo.Curve, block_id: str = None):
-        self.curve = curve
+    def __init__(self, region: geo.Curve, block_id: str = None):
+        self.region = region
         self.block_id = block_id
         self.area = self.calculate_area()
         self.is_eligible = False  # 가로주택 정비사업 적격 여부
@@ -82,10 +82,10 @@ class Block:
 
     def calculate_area(self) -> float:
         """블록의 면적 계산"""
-        if not self.curve or not self.curve.IsClosed:
+        if not self.region or not self.region.IsClosed:
             return 0.0
 
-        area_result = geo.AreaMassProperties.Compute(self.curve)
+        area_result = geo.AreaMassProperties.Compute(self.region)
         return area_result.Area if area_result else 0.0
 
     def check_area_requirement(self, max_area: float = 10000.0) -> bool:
@@ -128,8 +128,8 @@ def get_curve_from_points(
         geo.Point3d(points[i][0], points[i][1], 0) for i in range(start_idx, end_idx)
     ]
 
-    curve = geo.PolylineCurve(curve_points)
-    return curve if curve and curve.IsValid else None
+    curve_crv = geo.PolylineCurve(curve_points)
+    return curve_crv if curve_crv and curve_crv.IsValid else None
 
 
 def get_part_indices(shape: Any) -> List[Tuple[int, int]]:
@@ -145,30 +145,30 @@ def get_curves_from_shape(
     shape: Any,
 ) -> Tuple[Optional[geo.PolylineCurve], List[geo.PolylineCurve]]:
     """shape에서 외부 경계와 내부 구멍 커브들을 추출"""
-    boundary = None
-    holes = []
+    boundary_region = None
+    hole_regions = []
 
     part_indices = get_part_indices(shape)
 
     for i, (start_idx, end_idx) in enumerate(part_indices):
-        curve = get_curve_from_points(shape.points, start_idx, end_idx)
-        if curve:
+        curve_crv = get_curve_from_points(shape.points, start_idx, end_idx)
+        if curve_crv:
             if i == 0:
-                boundary = curve
+                boundary_region = curve_crv
             else:
-                holes.append(curve)
+                hole_regions.append(curve_crv)
 
     # 단일 폴리곤이고 닫혀있지 않은 경우 처리
-    if boundary is None and len(part_indices) == 1:
+    if boundary_region is None and len(part_indices) == 1:
         points = [geo.Point3d(pt[0], pt[1], 0) for pt in shape.points]
         if len(points) >= 3:
             if points[0].DistanceTo(points[-1]) > 0.001:
                 points.append(points[0])
-            curve = geo.PolylineCurve(points)
-            if curve and curve.IsValid:
-                boundary = curve
+            curve_crv = geo.PolylineCurve(points)
+            if curve_crv and curve_crv.IsValid:
+                boundary_region = curve_crv
 
-    return boundary, holes
+    return boundary_region, hole_regions
 
 
 def get_field_value(
@@ -186,18 +186,18 @@ def create_parcel_from_shape(
     shape: Any, record: List[Any], fields: List[str]
 ) -> Optional[Parcel]:
     """shape에서 Parcel 객체 생성"""
-    boundary, holes = get_curves_from_shape(shape)
+    boundary_region, hole_regions = get_curves_from_shape(shape)
 
-    if not boundary or not boundary.IsValid:
+    if not boundary_region or not boundary_region.IsValid:
         return None
 
     pnu = get_field_value(record, fields, "A1")  # 구 PNU
     jimok = get_field_value(record, fields, "A11")  # 구 JIMOK
 
     if jimok == "도로":
-        parcel = Road(boundary, pnu, jimok, record, holes)
+        parcel = Road(boundary_region, pnu, jimok, record, hole_regions)
     else:
-        parcel = Lot(boundary, pnu, jimok, record, holes)
+        parcel = Lot(boundary_region, pnu, jimok, record, hole_regions)
 
     return parcel if parcel.preprocess_curve() else None
 
@@ -234,17 +234,17 @@ def classify_parcels(parcels: List[Parcel]) -> Tuple[List[Lot], List[Road]]:
 
 
 def perform_clipper_offset(
-    curves: List[geo.Curve], distance: float = 0.1
+    regions: List[geo.Curve], distance: float = 0.1
 ) -> List[geo.Curve]:
     """Clipper를 사용하여 커브들을 offset"""
-    if not curves:
+    if not regions:
         return []
 
-    offset_curves = []
+    offset_regions = []
 
     try:
         result = ghcomp.ClipperComponents.PolylineOffset(
-            curves,
+            regions,
             distance,
             geo.Plane.WorldXY,
             0.01,  # tolerance
@@ -255,26 +255,26 @@ def perform_clipper_offset(
 
         if result and result.contour:
             if hasattr(result.contour, "__iter__"):
-                offset_curves = list(result.contour)
+                offset_regions = list(result.contour)
             else:
-                offset_curves = [result.contour]
+                offset_regions = [result.contour]
 
     except Exception as e:
         print(f"Offset 오류: {e}")
 
-    return offset_curves
+    return offset_regions
 
 
 # ================ 공간 그룹핑 관련 함수 ================
 
 
-def get_curve_center(curve: geo.Curve) -> geo.Point3d:
+def get_curve_center(curve_crv: geo.Curve) -> geo.Point3d:
     """커브의 중심점 계산"""
-    area_props = geo.AreaMassProperties.Compute(curve)
+    area_props = geo.AreaMassProperties.Compute(curve_crv)
     if area_props:
         return area_props.Centroid
     else:
-        bbox = curve.GetBoundingBox(False)
+        bbox = curve_crv.GetBoundingBox(False)
         return bbox.Center
 
 
@@ -291,19 +291,19 @@ def check_bounding_boxes_intersect(
 
 
 def get_spatial_groups(
-    curves: List[geo.Curve], max_distance: float = 50.0
+    regions: List[geo.Curve], max_distance: float = 50.0
 ) -> List[List[int]]:
     """공간적으로 가까운 커브들을 그룹으로 묶기"""
-    n = len(curves)
+    n = len(regions)
     if n == 0:
         return []
 
     # 각 커브의 중심점과 바운딩박스 계산
     centers = []
     bboxes = []
-    for curve in curves:
-        centers.append(get_curve_center(curve))
-        bbox = curve.GetBoundingBox(False)
+    for region in regions:
+        centers.append(get_curve_center(region))
+        bbox = region.GetBoundingBox(False)
         bbox.Inflate(max_distance)
         bboxes.append(bbox)
 
@@ -344,69 +344,69 @@ def get_spatial_groups(
 # ================ Boolean Union 관련 함수 ================
 
 
-def union_curves_in_group(curves: List[geo.Curve]) -> List[geo.Curve]:
+def union_curves_in_group(regions: List[geo.Curve]) -> List[geo.Curve]:
     """그룹 내 커브들을 Union"""
-    if not curves or len(curves) <= 1:
-        return curves
+    if not regions or len(regions) <= 1:
+        return regions
 
     try:
         # CreateBooleanRegions 사용 (urban-geometry 스타일)
         boolean_regions = geo.Curve.CreateBooleanRegions(
-            curves, geo.Plane.WorldXY, True, 0.01  # combine_regions  # tolerance
+            regions, geo.Plane.WorldXY, True, 0.01  # combine_regions  # tolerance
         )
 
         if boolean_regions and boolean_regions.RegionCount > 0:
-            result_curves = []
+            result_regions = []
             for i in range(boolean_regions.RegionCount):
                 region_curves = boolean_regions.RegionCurves(i)
                 if region_curves and len(region_curves) > 0:
                     # 첫 번째 커브가 외부 경계
                     outer_boundary = region_curves[0]
                     if outer_boundary.IsClosed:
-                        result_curves.append(outer_boundary)
+                        result_regions.append(outer_boundary)
 
-            if result_curves:
-                return result_curves
+            if result_regions:
+                return result_regions
 
     except Exception as e:
         pass  # 실패시 다음 방법 시도
 
     # CreateBooleanUnion 백업 방법
     try:
-        union_result = geo.Curve.CreateBooleanUnion(curves, 0.01)
+        union_result = geo.Curve.CreateBooleanUnion(regions, 0.01)
         if union_result and len(union_result) > 0:
             return list(union_result)
     except:
         pass
 
     # 모든 방법 실패시 원본 반환
-    return curves
+    return regions
 
 
 def create_blocks_with_spatial_union(
-    lot_curves: List[geo.Curve],
+    lot_regions: List[geo.Curve],
     offset_distance: float = 0.1,
     group_distance: float = 50.0,
 ) -> List[Block]:
     """공간적으로 가까운 필지들을 Union하여 블록 생성"""
-    if not lot_curves:
+    if not lot_regions:
         return []
 
-    print(f"   블록 생성 시작 ({len(lot_curves)}개 필지)...")
+    print(f"   블록 생성 시작 ({len(lot_regions)}개 필지)...")
     start_time = time.time()
 
     # 1. Offset 처리
     print(f"   Offset 처리 ({offset_distance}m)...")
-    offset_curves = perform_clipper_offset(lot_curves, offset_distance)
-    print(f"   Offset 완료: {len(lot_curves)} -> {len(offset_curves)}개")
+    offset_regions = perform_clipper_offset(lot_regions, offset_distance)
+    print(f"   Offset 완료: {len(lot_regions)} -> {len(offset_regions)}개")
 
-    if not offset_curves:
+    if not offset_regions:
         print("   Offset 실패")
         return []
 
     # 2. 공간 그룹 생성
     print(f"   공간 그룹핑 (최대거리: {group_distance}m)...")
-    groups = get_spatial_groups(offset_curves, group_distance)
+    groups = get_spatial_groups(offset_regions, group_distance)
     print(f"   {len(groups)}개 그룹 생성")
 
     # 3. 각 그룹별로 Union하여 블록 생성
@@ -418,29 +418,29 @@ def create_blocks_with_spatial_union(
             print(f"   진행중: {i}/{len(groups)} 그룹")
 
         # 그룹의 커브들 추출
-        group_curves = [offset_curves[idx] for idx in group_indices]
+        group_regions = [offset_regions[idx] for idx in group_indices]
 
         # 그룹 내 Union
-        union_results = union_curves_in_group(group_curves)
+        union_results = union_curves_in_group(group_regions)
 
         # 블록 객체 생성
-        for j, curve in enumerate(union_results):
-            if curve and curve.IsValid and curve.IsClosed:
-                block = Block(curve, f"Block_{len(blocks)}")
+        for j, region in enumerate(union_results):
+            if region and region.IsValid and region.IsClosed:
+                block = Block(region, f"Block_{len(blocks)}")
                 blocks.append(block)
 
     # 4. 전체 결과를 다시 한번 Union (선택적)
     if len(blocks) > 1 and len(blocks) < 100:
         print(f"   전체 Union 시도...")
-        all_curves = [block.curve for block in blocks]
-        final_results = union_curves_in_group(all_curves)
+        all_regions = [block.region for block in blocks]
+        final_results = union_curves_in_group(all_regions)
 
         if len(final_results) < len(blocks):
             print(f"   전체 Union 성공: {len(blocks)} -> {len(final_results)}개")
             blocks = []
-            for i, curve in enumerate(final_results):
-                if curve and curve.IsValid and curve.IsClosed:
-                    block = Block(curve, f"Block_{i}")
+            for i, region in enumerate(final_results):
+                if region and region.IsValid and region.IsClosed:
+                    block = Block(region, f"Block_{i}")
                     blocks.append(block)
 
     print(f"   블록 생성 완료: {len(blocks)}개 블록 ({time.time() - start_time:.2f}초)")
@@ -468,11 +468,11 @@ def find_street_housing_blocks(
         (적격 블록 리스트, 부적격 블록 리스트)
     """
     # 대지 커브 추출
-    lot_curves = [lot.curve for lot in lots]
+    lot_regions = [lot.region for lot in lots]
 
     # 블록 생성
     blocks = create_blocks_with_spatial_union(
-        lot_curves, offset_distance, group_distance
+        lot_regions, offset_distance, group_distance
     )
 
     # 적격성 판별
@@ -542,9 +542,9 @@ if __name__ == "__main__":
     print(f"\n총 실행 시간: {time.time() - total_start:.2f}초")
 
     # Grasshopper 출력용 변수
-    all_lot_crvs = [lot.curve for lot in lots]
-    road_crvs = [road.curve for road in roads]
+    all_lot_crvs = [lot.region for lot in lots]
+    road_crvs = [road.region for road in roads]
 
     # 블록 커브와 면적
-    eligible_block_crvs = [block.curve for block in eligible_blocks]
-    ineligible_block_crvs = [block.curve for block in ineligible_blocks]
+    eligible_block_crvs = [block.region for block in eligible_blocks]
+    ineligible_block_crvs = [block.region for block in ineligible_blocks]

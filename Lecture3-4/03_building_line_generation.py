@@ -83,7 +83,7 @@ class BuildingLineGenerator:
             return None
         
         # 중심점
-        center = rg.Point3d(
+        center_pt = rg.Point3d(
             (bbox[0].X + bbox[1].X) / 2,
             (bbox[0].Y + bbox[3].Y) / 2,
             0
@@ -109,8 +109,8 @@ class BuildingLineGenerator:
         
         # 건물 외곽선 생성
         corner1 = rg.Point3d(
-            center.X - building_width/2,
-            center.Y - building_depth/2,
+            center_pt.X - building_width/2,
+            center_pt.Y - building_depth/2,
             0
         )
         
@@ -177,7 +177,7 @@ class BuildingLineGenerator:
         courtyard_depth = (outer_bbox[3].Y - outer_bbox[0].Y) * courtyard_ratio
         
         # 중정 중심
-        center = rg.Point3d(
+        center_pt = rg.Point3d(
             (outer_bbox[0].X + outer_bbox[1].X) / 2,
             (outer_bbox[0].Y + outer_bbox[3].Y) / 2,
             0
@@ -185,8 +185,8 @@ class BuildingLineGenerator:
         
         # 중정 생성
         courtyard_corner = rg.Point3d(
-            center.X - courtyard_width/2,
-            center.Y - courtyard_depth/2,
+            center_pt.X - courtyard_width/2,
+            center_pt.Y - courtyard_depth/2,
             0
         )
         
