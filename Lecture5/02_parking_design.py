@@ -307,11 +307,11 @@ class ParkingDesigner:
             stall_type = rs.GetUserText(stall, "type")
             
             # 주차면 번호
-            center = rs.CurveAreaCentroid(stall)[0]
+            center_pt = rs.CurveAreaCentroid(stall)[0]
             
             if stall_type == "handicap":
                 # 장애인 심볼
-                symbol = rs.AddCircle(center, 0.5)
+                symbol = rs.AddCircle(center_pt, 0.5)
                 layout['markings'].append(symbol)
             
             # 휠스토퍼 위치
@@ -327,15 +327,15 @@ class ParkingDesigner:
     def add_circulation_arrows(self, layout):
         """차량 동선 화살표 추가"""
         for aisle in layout['aisles']:
-            center = rs.CurveAreaCentroid(aisle)[0]
+            center_pt = rs.CurveAreaCentroid(aisle)[0]
             
             # 화살표 (간단한 표시)
             arrow_pts = [
-                (center.X - 2, center.Y, 0),
-                (center.X + 2, center.Y, 0),
-                (center.X + 1, center.Y + 0.5, 0),
-                (center.X + 2, center.Y, 0),
-                (center.X + 1, center.Y - 0.5, 0)
+                (center_pt.X - 2, center_pt.Y, 0),
+                (center_pt.X + 2, center_pt.Y, 0),
+                (center_pt.X + 1, center_pt.Y + 0.5, 0),
+                (center_pt.X + 2, center_pt.Y, 0),
+                (center_pt.X + 1, center_pt.Y - 0.5, 0)
             ]
             arrow = rs.AddPolyline(arrow_pts[:-2])
             layout['markings'].append(arrow)

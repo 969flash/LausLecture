@@ -269,11 +269,11 @@ class IsovistAnalyzer:
         while x <= bbox[1].X:
             y = bbox[0].Y
             while y <= bbox[3].Y:
-                point = rg.Point3d(x, y, self.eye_height)
+                point_pt = rg.Point3d(x, y, self.eye_height)
                 
                 # 장애물 내부가 아닌지 확인
-                if not self.is_inside_obstacle(point):
-                    grid_points.append(point)
+                if not self.is_inside_obstacle(point_pt):
+                    grid_points.append(point_pt)
                 
                 y += grid_spacing
             x += grid_spacing
