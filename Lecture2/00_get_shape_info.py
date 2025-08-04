@@ -3,7 +3,6 @@
 import Rhino.Geometry as geo
 import shapefile
 import os
-import time
 from collections import Counter
 from typing import List, Tuple, Any, Optional
 
@@ -205,38 +204,18 @@ def classify_parcels(parcels: List[Parcel]) -> Tuple[List[Lot], List[Road]]:
 
 
 if __name__ == "__main__":
-    # 전체 실행 시간 측정
-    total_start = time.time()
-    
-    print("=" * 60)
-    print("지목별 분포 분석")
-    print("=" * 60)
-    
     # 파일 경로 설정
     shp_path = os.path.join(os.path.dirname(__file__), "AL_D194_11680_20250123.shp")
     
-    # 1. SHP 파일 읽기
-    print("\n1. SHP 파일 읽기...")
-    start = time.time()
+    # SHP 파일 읽기
     shapes, records, fields = read_shp_file(shp_path)
-    print(f"   완료: {time.time() - start:.2f}초")
     
-    # 2. Parcel 객체 생성
-    print("\n2. Parcel 객체 생성...")
-    start = time.time()
+    # Parcel 객체 생성
     parcels = get_parcels_from_shapes(shapes, records, fields)
-    print(f"   완료: {time.time() - start:.2f}초 ({len(parcels)}개 생성)")
     
-    # 3. 필지 분류
-    print("\n3. 필지 분류...")
-    start = time.time()
+    # 필지 분류
     lots, roads = classify_parcels(parcels)
-    print(f"   완료: {time.time() - start:.2f}초")
-    print(f"   대지: {len(lots)}개, 도로: {len(roads)}개")
-    
-    # 4. 지목 분석
-    print("\n4. 지목 정보 분석...")
-    start = time.time()
+    print(f"대지: {len(lots)}개, 도로: {len(roads)}개")
     
     # 지목별 카운트
     jimok_counter = Counter()
@@ -246,11 +225,8 @@ if __name__ == "__main__":
     total_count = len(parcels)
     sorted_jimok = sorted(jimok_counter.items(), key=lambda x: x[1], reverse=True)
     
-    print(f"   완료: {time.time() - start:.2f}초")
-    
     # 결과 출력
-    print(f"\n=== 분석 결과 ===")
-    print(f"전체 필지: {total_count:,}개")
+    print(f"\n전체 필지: {total_count:,}개")
     print(f"\n지목별 분포:")
     print("-" * 40)
     
@@ -266,8 +242,6 @@ if __name__ == "__main__":
     for i, (jimok, count) in enumerate(sorted_jimok[:5]):
         percentage = (count / total_count) * 100
         print(f"{i+1}. {jimok}: {count:,}개 ({percentage:.1f}%)")
-    
-    print(f"\n총 실행 시간: {time.time() - total_start:.2f}초")
     
     # Grasshopper 출력용 변수
     all_lot_crvs = [lot.region for lot in lots]
