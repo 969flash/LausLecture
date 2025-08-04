@@ -2,6 +2,7 @@ import Rhino.Geometry as geo
 
 # 1. 기본적은 폴리라인 커브 생성
 pts = [geo.Point3d(i, i * i * 0.1, 0) for i in range(-5, 6)]
+
 base_crv = geo.PolylineCurve(pts)
 
 # 커브의 길이 계산
