@@ -25,3 +25,5 @@ brep = geo.Brep.CreateFromSphere(sphere)
 xform = geo.Transform.Translation(10, 0, 0)
 brep_x = brep.Duplicate()
 brep_x.Transform(xform)
+
+## 오늘 수엄 여기까지
