@@ -3,7 +3,6 @@
 import Rhino.Geometry as geo
 import shapefile
 import os
-from collections import Counter
 from typing import List, Tuple, Any, Optional
 
 
@@ -19,7 +18,9 @@ class Parcel:
         hole_regions: List[geo.Curve] = None,
     ):
         self.region = region  # 외부 경계 커브
-        self.hole_regions = hole_regions if hole_regions is not None else []  # 내부 구멍들
+        self.hole_regions = (
+            hole_regions if hole_regions is not None else []
+        )  # 내부 구멍들
         self.pnu = pnu
         self.jimok = jimok
         self.record = record
@@ -47,7 +48,9 @@ class Parcel:
         valid_hole_regions = []
         for hole_region in self.hole_regions:
             if hole_region and hole_region.IsValid:
-                simplified_hole = hole_region.Simplify(geo.CurveSimplifyOptions.All, 0.1, 1.0)
+                simplified_hole = hole_region.Simplify(
+                    geo.CurveSimplifyOptions.All, 0.1, 1.0
+                )
                 if simplified_hole:
                     valid_hole_regions.append(simplified_hole)
                 else:
@@ -59,15 +62,18 @@ class Parcel:
 
 class Road(Parcel):
     """도로 클래스"""
+
     pass
 
 
 class Lot(Parcel):
     """대지 클래스"""
+
     pass
 
 
 # ================ 파일 읽기 관련 함수 ================
+
 
 def read_shp_file(file_path: str) -> Tuple[List[Any], List[Any], List[str]]:
     """shapefile을 읽어서 shapes와 records를 반환"""
@@ -89,9 +95,11 @@ def get_curve_from_points(
     points: List[Tuple[float, float]], start_idx: int, end_idx: int
 ) -> Optional[geo.PolylineCurve]:
     """점 리스트에서 특정 구간의 커브를 생성"""
+    # 최소 3개의 점이 필요
     if end_idx - start_idx < 3:
         return None
 
+    # 시작과 끝 점이 동일하지 않으면(닫혀있지 않으면) None 반환
     first_pt = points[start_idx]
     last_pt = points[end_idx - 1]
     if first_pt[0] != last_pt[0] or first_pt[1] != last_pt[1]:
@@ -206,43 +214,47 @@ def classify_parcels(parcels: List[Parcel]) -> Tuple[List[Lot], List[Road]]:
 if __name__ == "__main__":
     # 파일 경로 설정
     shp_path = os.path.join(os.path.dirname(__file__), "AL_D194_11680_20250123.shp")
-    
+
     # SHP 파일 읽기
     shapes, records, fields = read_shp_file(shp_path)
-    
+
     # Parcel 객체 생성
     parcels = get_parcels_from_shapes(shapes, records, fields)
-    
+
     # 필지 분류
     lots, roads = classify_parcels(parcels)
     print(f"대지: {len(lots)}개, 도로: {len(roads)}개")
-    
+
     # 지목별 카운트
-    jimok_counter = Counter()
+    jimok_counter = {}
     for parcel in parcels:
-        jimok_counter[parcel.jimok] += 1
-    
+        jimok = parcel.jimok
+        if jimok in jimok_counter:
+            jimok_counter[jimok] += 1
+        else:
+            jimok_counter[jimok] = 1
+
     total_count = len(parcels)
     sorted_jimok = sorted(jimok_counter.items(), key=lambda x: x[1], reverse=True)
-    
+
     # 결과 출력
     print(f"\n전체 필지: {total_count:,}개")
     print(f"\n지목별 분포:")
     print("-" * 40)
-    
+
     for jimok, count in sorted_jimok:
         percentage = (count / total_count) * 100
         print(f"{jimok:10s}: {count:6,}개 ({percentage:5.2f}%)")
-    
+
     print("-" * 40)
     print(f"총 지목 종류: {len(jimok_counter)}개")
-    
+
     # 주요 지목 TOP 5
     print("\n주요 지목 TOP 5:")
     for i, (jimok, count) in enumerate(sorted_jimok[:5]):
         percentage = (count / total_count) * 100
         print(f"{i+1}. {jimok}: {count:,}개 ({percentage:.1f}%)")
-    
+
     # Grasshopper 출력용 변수
     all_lot_crvs = [lot.region for lot in lots]
     road_crvs = [road.region for road in roads]
