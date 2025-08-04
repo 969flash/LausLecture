@@ -1,0 +1,41 @@
+{
+    "include": [
+        "Lecture1",
+        "Lecture2",
+        "Lecture3-4",
+        "Lecture5",
+        "Lecture6"
+    ],
+    "exclude": [
+        "**/node_modules",
+        "**/__pycache__"
+    ],
+    "defineConstant": {
+        "DEBUG": true
+    },
+    "pythonVersion": "3.9",
+    "pythonPlatform": "Windows",
+    "typeCheckingMode": "basic",
+    "useLibraryCodeForTypes": true,
+    "reportMissingImports": false,
+    "reportMissingTypeStubs": false,
+    "reportMissingModuleSource": false,
+    "reportOptionalMemberAccess": false,
+    "reportGeneralTypeIssues": false,
+    "reportOptionalCall": false,
+    "reportOptionalIterable": false,
+    "reportOptionalContextManager": false,
+    "reportOptionalOperand": false,
+    "stubPath": "./stub/RhinoStub/rhino3d-8.19.25132.1001",
+    "extraPaths": [
+        "./stub/RhinoStub",
+        "./stub/RhinoStub/rhino3d-8.19.25132.1001",
+        "./stub/RhinoStub/rhino3d-8.19.25132.1001/Rhino",
+        "./stub/RhinoStub/rhino3d-8.19.25132.1001/Rhino/Geometry",
+        "./stub/RhinoStub/rhino3d-8.19.25132.1001/Rhino/Geometry/Intersect",
+        "./stub/RhinoStub/rhino3d-8.19.25132.1001/Grasshopper",
+        "./stub/RhinoStub/rhino3d-8.19.25132.1001/System"
+    ],
+    "venvPath": ".",
+    "venv": "stub"
+}

@@ -3,7 +3,6 @@
 import Rhino.Geometry as geo
 import shapefile
 import os
-import time
 from typing import List, Tuple, Any, Optional
 import ghpythonlib.components as ghcomp
 
@@ -416,85 +415,46 @@ def find_flag_lots(
     road_curves = get_all_road_curves(roads)
     road_bboxes = create_road_bounding_boxes(road_curves)
 
-    print(f"\n도로 커브 수: {len(road_curves)}개")
-
     # 1단계: 도로에 접한 토지만 필터링
-    print("\n도로 접근성 필터링...")
-    filter_start = time.time()
-
     accessible_lots = []
     for lot in lots:
         if check_lot_road_access(lot, road_curves, road_bboxes):
             lot.has_road_access = True
             accessible_lots.append(lot)
 
-    print(
-        f"도로 접근 토지: {len(accessible_lots)}개 / {len(lots)}개 ({time.time() - filter_start:.2f}초)"
-    )
-
     # 2단계: 자루형 토지 판별
-    print(f"\n자루형 토지 판별 시작 (대상: {len(accessible_lots)}개)")
-    start_time = time.time()
-
     flag_lots = []
-    processed = 0
-
     for lot in accessible_lots:
         if is_curve_flag_shaped(lot.region, road_curves, road_bboxes, offset_distance):
             lot.is_flag_lot = True
             flag_lots.append(lot)
 
-        # 진행률 표시
-        processed += 1
-        if processed % max(1, len(accessible_lots) // 10) == 0:
-            elapsed = time.time() - start_time
-            print(f"  처리 진행: {processed}/{len(accessible_lots)} ({elapsed:.2f}초)")
-
-    # 완료 통계
-    total_time = time.time() - start_time
-    print(f"\n자루형 토지 판별 완료: {total_time:.2f}초")
-
-    if accessible_lots:
-        print(f"평균 처리 시간: {total_time/len(accessible_lots)*1000:.2f}ms/필지")
-
     return flag_lots
 
 
 if __name__ == "__main__":
-    # 전체 실행 시간 측정
-    total_start = time.time()
-
     # 파일 경로 설정
     shp_path = os.path.join(os.path.dirname(__file__), "AL_D194_11680_20250123.shp")
 
-    print("1. SHP 파일 읽기...")
-    start = time.time()
+    # SHP 파일 읽기
     shapes, records, fields = read_shp_file(shp_path)
-    print(f"   완료: {time.time() - start:.2f}초")
 
-    print("\n2. Parcel 객체 생성...")
-    start = time.time()
+    # Parcel 객체 생성
     parcels = get_parcels_from_shapes(shapes, records, fields)
-    print(f"   완료: {time.time() - start:.2f}초 ({len(parcels)}개 생성)")
 
-    print("\n3. 필지 분류...")
-    start = time.time()
+    # 필지 분류
     lots, roads = classify_parcels(parcels)
-    print(f"   완료: {time.time() - start:.2f}초")
-    print(f"   대지: {len(lots)}개, 도로: {len(roads)}개")
+    print(f"대지: {len(lots)}개, 도로: {len(roads)}개")
 
-    print("\n4. 자루형 토지 찾기...")
+    # 자루형 토지 찾기
     flag_lots = find_flag_lots(lots, roads, offset_distance=4.0)
 
     # 결과 출력
-    print(f"\n=== 결과 ===")
-    print(f"전체 대지: {len(lots)}개")
+    print(f"\n전체 대지: {len(lots)}개")
     print(f"자루형 토지: {len(flag_lots)}개")
 
     if lots:
         print(f"자루형 토지 비율: {len(flag_lots)/len(lots)*100:.1f}%")
-
-    print(f"\n총 실행 시간: {time.time() - total_start:.2f}초")
 
     # 커브만 추출
     all_lot_crvs = [lot.region for lot in lots]

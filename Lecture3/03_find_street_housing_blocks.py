@@ -20,7 +20,9 @@ class Parcel:
         hole_regions: List[geo.Curve] = None,
     ):
         self.region = region  # 외부 경계 커브
-        self.hole_regions = hole_regions if hole_regions is not None else []  # 내부 구멍들
+        self.hole_regions = (
+            hole_regions if hole_regions is not None else []
+        )  # 내부 구멍들
         self.pnu = pnu
         self.jimok = jimok
         self.record = record
@@ -447,6 +449,27 @@ def create_blocks_with_spatial_union(
     return blocks
 
 
+# ================ 인풋 바운더리로 부터 parcel 탐색  =================
+
+
+def get_parcels_from_boundary(
+    parcels: List[Parcel], roads: List[Road], input_boundary: geo.Curve
+) -> List[Parcel]:
+    """입력된 경계 내에 있는 Parcel 객체들을 반환"""
+    relationship = geo.Curve.PlanarClosedCurveRelationship(
+        target_region, other_region, geo.Plane.WorldXY, TOL
+    )
+    # 완전히 떨어져 있는 경우. 닿은 부분 없이.
+    if relationship == geo.RegionContainment.Disjoint:
+        return False
+
+    # 포함 관계 인 경우. 닿은 부분 없이.
+    if relationship != geo.RegionContainment.MutualIntersection:
+        return True
+
+    return selected_parcels
+
+
 # ================ 가로주택 정비사업 블록 찾기 메인 함수 ================
 
 
@@ -520,26 +543,15 @@ if __name__ == "__main__":
     print(f"   완료: {time.time() - start:.2f}초")
     print(f"   대지: {len(lots)}개, 도로: {len(roads)}개")
 
-    # 4. 가로주택 정비사업 블록 찾기
-    print("\n4. 가로주택 정비사업 블록 찾기...")
+    selected_parcel = get_parcels_from_boundary(lots, roads, input_boundary)
+
+    # 가로주택 정비사업 블록 찾기
     eligible_blocks, ineligible_blocks = find_street_housing_blocks(
         lots, offset_distance=0.1, group_distance=50.0, max_area=10000.0
     )
 
-    # 결과 출력
-    print(f"\n=== 결과 ===")
-    print(f"전체 블록: {len(eligible_blocks) + len(ineligible_blocks)}개")
-    print(f"적격 블록: {len(eligible_blocks)}개")
-    print(f"부적격 블록: {len(ineligible_blocks)}개")
-
     if eligible_blocks:
         areas = [block.area for block in eligible_blocks]
-        print(f"\n적격 블록 면적 분포:")
-        print(f"  최소: {min(areas):.1f}m²")
-        print(f"  최대: {max(areas):.1f}m²")
-        print(f"  평균: {sum(areas)/len(areas):.1f}m²")
-
-    print(f"\n총 실행 시간: {time.time() - total_start:.2f}초")
 
     # Grasshopper 출력용 변수
     all_lot_crvs = [lot.region for lot in lots]
