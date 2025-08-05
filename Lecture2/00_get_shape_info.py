@@ -5,6 +5,11 @@ import shapefile
 import os
 from typing import List, Tuple, Any, Optional
 
+import utils
+import importlib
+
+importlib.reload(utils)
+
 
 class Parcel:
     """기본 필지 클래스"""
