@@ -373,6 +373,7 @@ def create_points_for_mesh(
         params = curve.DivideByLength(resolution, True)
         if params:
             points.extend([curve.PointAt(param) for param in params])
+
     return points
 
 
@@ -420,7 +421,7 @@ def read_shapefiles_from_zip(
                             shx=zip_file.open(f"{prefix}.shx"),
                             dbf=zip_file.open(f"{prefix}.dbf"),
                             prj=zip_file.open(f"{prefix}.prj"),
-                            encoding="utf-8"
+                            encoding="utf-8",
                         )
                     )
                 except UnicodeDecodeError:
@@ -431,7 +432,7 @@ def read_shapefiles_from_zip(
                             shx=zip_file.open(f"{prefix}.shx"),
                             dbf=zip_file.open(f"{prefix}.dbf"),
                             prj=zip_file.open(f"{prefix}.prj"),
-                            encoding="cp949"
+                            encoding="cp949",
                         )
                     )
             except KeyError:
