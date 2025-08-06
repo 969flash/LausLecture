@@ -412,14 +412,28 @@ def read_shapefiles_from_zip(
     for zip_file in zip_files:
         for prefix in file_prefixes:
             try:
-                readers.append(
-                    shapefile.Reader(
-                        shp=zip_file.open(f"{prefix}.shp"),
-                        shx=zip_file.open(f"{prefix}.shx"),
-                        dbf=zip_file.open(f"{prefix}.dbf"),
-                        prj=zip_file.open(f"{prefix}.prj"),
+                # 먼저 UTF-8로 시도
+                try:
+                    readers.append(
+                        shapefile.Reader(
+                            shp=zip_file.open(f"{prefix}.shp"),
+                            shx=zip_file.open(f"{prefix}.shx"),
+                            dbf=zip_file.open(f"{prefix}.dbf"),
+                            prj=zip_file.open(f"{prefix}.prj"),
+                            encoding="utf-8"
+                        )
                     )
-                )
+                except UnicodeDecodeError:
+                    # UTF-8 실패시 CP949로 시도
+                    readers.append(
+                        shapefile.Reader(
+                            shp=zip_file.open(f"{prefix}.shp"),
+                            shx=zip_file.open(f"{prefix}.shx"),
+                            dbf=zip_file.open(f"{prefix}.dbf"),
+                            prj=zip_file.open(f"{prefix}.prj"),
+                            encoding="cp949"
+                        )
+                    )
             except KeyError:
                 continue
 

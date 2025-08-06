@@ -17,7 +17,7 @@ RESOLUTION = 4
 
 # paths -> parameter of the component in grasshopper that is the path to the zip files
 
-zip_paths = [os.path.join(os.path.dirname(__file__), "37608080.zip")]
+zip_paths = [os.path.join(os.path.dirname(__file__), "37705092.zip")]
 
 # Main workflow
 # Read shapefiles from zip
