@@ -12,122 +12,6 @@ import importlib
 importlib.reload(utils)
 
 
-def get_curve_from_points(
-    points: List[Tuple[float, float]], start_idx: int, end_idx: int
-) -> Optional[geo.PolylineCurve]:
-    """점 리스트에서 특정 구간의 커브를 생성"""
-    if end_idx - start_idx < 3:
-        return None
-
-    first_pt = points[start_idx]
-    last_pt = points[end_idx - 1]
-    if first_pt[0] != last_pt[0] or first_pt[1] != last_pt[1]:
-        return None
-
-    curve_points = [
-        geo.Point3d(points[i][0], points[i][1], 0) for i in range(start_idx, end_idx)
-    ]
-
-    curve_crv = geo.PolylineCurve(curve_points)
-    return curve_crv if curve_crv and curve_crv.IsValid else None
-
-
-def get_part_indices(shape: Any) -> List[Tuple[int, int]]:
-    """shape의 각 파트의 시작과 끝 인덱스를 반환"""
-    if not hasattr(shape, "parts") or len(shape.parts) <= 1:
-        return [(0, len(shape.points))]
-
-    parts = list(shape.parts) + [len(shape.points)]
-    return [(parts[i], parts[i + 1]) for i in range(len(shape.parts))]
-
-
-def get_curves_from_shape(
-    shape: Any,
-) -> Tuple[Optional[geo.PolylineCurve], List[geo.PolylineCurve]]:
-    """shape에서 외부 경계와 내부 구멍 커브들을 추출"""
-    boundary_region = None
-    hole_regions = []
-
-    part_indices = get_part_indices(shape)
-
-    for i, (start_idx, end_idx) in enumerate(part_indices):
-        curve_crv = get_curve_from_points(shape.points, start_idx, end_idx)
-        if curve_crv:
-            if i == 0:
-                boundary_region = curve_crv
-            else:
-                hole_regions.append(curve_crv)
-
-    # 단일 폴리곤이고 닫혀있지 않은 경우 처리
-    if boundary_region is None and len(part_indices) == 1:
-        points = [geo.Point3d(pt[0], pt[1], 0) for pt in shape.points]
-        if len(points) >= 3:
-            if points[0].DistanceTo(points[-1]) > 0.001:
-                points.append(points[0])
-            curve_crv = geo.PolylineCurve(points)
-            if curve_crv and curve_crv.IsValid:
-                boundary_region = curve_crv
-
-    return boundary_region, hole_regions
-
-
-def get_field_value(
-    record: List[Any], fields: List[str], field_name: str, default: str = "Unknown"
-) -> str:
-    """레코드에서 특정 필드값을 안전하게 추출"""
-    try:
-        index = fields.index(field_name)
-        return record[index]
-    except (ValueError, IndexError):
-        return default
-
-
-def create_parcel_from_shape(
-    shape: Any, record: List[Any], fields: List[str]
-) -> Optional[Parcel]:
-    """shape에서 Parcel 객체 생성"""
-    boundary_region, hole_regions = get_curves_from_shape(shape)
-
-    if not boundary_region or not boundary_region.IsValid:
-        return None
-
-    pnu = get_field_value(record, fields, "A1")  # 구 PNU
-    jimok = get_field_value(record, fields, "A11")  # 구 JIMOK
-
-    if jimok == "도로":
-        parcel = Road(boundary_region, pnu, jimok, record, hole_regions)
-    else:
-        parcel = Lot(boundary_region, pnu, jimok, record, hole_regions)
-
-    return parcel if parcel.preprocess_curve() else None
-
-
-def get_parcels_from_shapes(
-    shapes: List[Any], records: List[Any], fields: List[str]
-) -> List[Parcel]:
-    """모든 shape에서 Parcel 객체들을 생성"""
-    parcels = []
-
-    for shape, record in zip(shapes, records):
-        parcel = create_parcel_from_shape(shape, record, fields)
-        if parcel:
-            parcels.append(parcel)
-
-    return parcels
-
-
-def classify_parcels(parcels: List[Parcel]) -> Tuple[List[Lot], List[Road]]:
-    """Parcel 리스트를 Lot과 Road로 분류"""
-    lots = []
-    roads = []
-
-    for parcel in parcels:
-        if isinstance(parcel, Road):
-            roads.append(parcel)
-        else:
-            lots.append(parcel)
-
-    return lots, roads
 
 
 # ================ 도로 접근성 검사 함수 ================
@@ -202,7 +86,7 @@ def create_road_bounding_boxes(
 
 
 def check_lot_road_access(
-    lot: Lot,
+    lot: utils.Lot,
     road_curves: List[geo.Curve],
     road_bboxes: List[geo.BoundingBox],
     tolerance: float = 0.5,
@@ -220,7 +104,7 @@ def check_lot_road_access(
     return False
 
 
-def get_all_road_curves(roads: List[Road]) -> List[geo.Curve]:
+def get_all_road_curves(roads: List[utils.Road]) -> List[geo.Curve]:
     """도로의 모든 커브(외부 경계 + 내부 구멍)를 추출"""
     curves = []
     for road in roads:
@@ -316,8 +200,8 @@ def is_curve_flag_shaped(
 
 
 def find_flag_lots(
-    lots: List[Lot], roads: List[Road], offset_distance: float = 4.0
-) -> List[Lot]:
+    lots: List[utils.Lot], roads: List[utils.Road], offset_distance: float = 4.0
+) -> List[utils.Lot]:
     """자루형 토지를 찾아서 반환
 
     자루형 토지: 도로에 접하지만 좁은 통로로만 연결되어 있어
@@ -352,10 +236,10 @@ if __name__ == "__main__":
     shapes, records, fields = utils.read_shp_file(shp_path)
 
     # Parcel 객체 생성
-    parcels = get_parcels_from_shapes(shapes, records, fields)
+    parcels = utils.get_parcels_from_shapes(shapes, records, fields)
 
     # 필지 분류
-    lots, roads = classify_parcels(parcels)
+    lots, roads = utils.classify_parcels(parcels)
     print(f"대지: {len(lots)}개, 도로: {len(roads)}개")
 
     # 자루형 토지 찾기
