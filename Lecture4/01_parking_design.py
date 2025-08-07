@@ -81,6 +81,7 @@ def get_cells_from_inside_regions(
         edge = (l - pattern_sum) / 2
         return [edge] + pattern + [edge]
 
+    cells = []
     for region in regions:
         # region 기준으로 axis를 축으로하는 바운딩 박스 생성
         bbox = region.GetBoundingBox(axis)
@@ -89,6 +90,7 @@ def get_cells_from_inside_regions(
         main_length = max(dx, dy)
 
         cell_pattern = generate_pattern_list_v2(main_length)
+        print(f"Cell pattern: {cell_pattern}")
 
         for i, length in enumerate(cell_pattern):
             # length가 5가 되는 시점마다 Bbox main_length의 수직방향으로 셀의 베이스 세그먼트생성
@@ -107,6 +109,7 @@ def get_cells_from_inside_regions(
                 # 셀 생성
                 cells_from_seg = get_cells_from_segement(segment_for_cell, vec)
 
+                print(f"Cells from segment: {len(cells_from_seg)}")
                 cells.extend(cells_from_seg)
 
         # bbox의 긴변을 기준으로 셀 패턴 생성
@@ -213,7 +216,7 @@ cells_from_outside = get_cells_from_outside_regions(
 )
 
 # 4. 내부 영역에서 셀 생성
-cells_from_inside = get_cells_from_inside_regions(inside_regions, entrance_pt, axis)
+cells_from_inside = get_cells_from_inside_regions(inside_regions, axis)
 # cells_from_inside = []
 
 # 최종 셀 리스트 생성
