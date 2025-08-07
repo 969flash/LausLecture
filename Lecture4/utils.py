@@ -117,6 +117,21 @@ def has_region_intersection(
     return True
 
 
+def get_dist_between_pt_and_crv(
+    pt: geo.Point3d, crv: geo.Curve, rounding_precision=ROUNDING_PRECISION
+) -> float:
+    """
+    주어진 점과 커브 사이의 거리 계산
+    :param pt: Rhino.Geometry.Point3d 객체
+    :param crv: Rhino.Geometry.Curve 객체
+    :param rounding_precision: 거리 반올림 소수점 자리수
+    :return: 거리 (float)
+    """
+    dist = pt.DistanceTo(crv.PointAt(crv.ClosestPoint(pt)[1]))
+    dist = round(dist, rounding_precision)
+    return dist
+
+
 def is_region_inside_region(
     region: geo.Curve, other_region: geo.Curve, tol: float = TOL
 ) -> bool:
@@ -133,7 +148,7 @@ def is_region_inside_region(
         region, other_region, geo.Plane.WorldXY, tol
     )
     # region이 other_region 내부에 있는 경우
-    if relationship == geo.RegionContainment.Inside:
+    if relationship == geo.RegionContainment.AInsideB:
         return True
     return False
 
@@ -214,6 +229,24 @@ def get_pt_by_length(
         return []
 
     return [crv.PointAt(param) for param in params]
+
+
+def move_curve(crv: geo.Curve, vec: geo.Vector3d):
+    """커브를 주어진 벡터로 이동시킨다."""
+    moved_crv = crv.Duplicate()
+    moved_crv.Translate(vec)
+    return moved_crv
+
+
+def get_bounding_box_crv(curve: geo.Curve, plane: geo.Plane) -> geo.PolylineCurve:
+    """주어진 커브의 바운딩 박스를 구한다."""
+    bbox = curve.GetBoundingBox(plane)
+
+    corners = list(bbox.GetCorners())[:4]  # type: List[geo.Point3d]
+    for corner in corners:
+        corner.Transform(geo.Transform.ChangeBasis(plane, geo.Plane.WorldXY))
+
+    return geo.PolylineCurve(corners + [corners[0]])
 
 
 def convert_io_to_list(func):
