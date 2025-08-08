@@ -212,7 +212,7 @@ def get_outside_perp_vec_from_pt(pt: geo.Point3d, region: geo.Curve) -> geo.Vect
     _, param = region.ClosestPoint(pt)
     vec_perp_outer = region.PerpendicularFrameAt(param)[1].XAxis
 
-    if region.ClosedCurveOrientation() == geo.CurveOrientation.Clockwise:
+    if region.ClosedCurveOrientation() != geo.CurveOrientation.Clockwise:
         vec_perp_outer = -vec_perp_outer
 
     return vec_perp_outer

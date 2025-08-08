@@ -111,7 +111,22 @@ class OepnspaceGenerator:
         # 4. 후보 지역 조정(축소)
         openspace_regions = self.adjust_candidate_regions(sorted_candidates)
 
+        openspace_regions = self.filter_openspace_regions(openspace_regions)
+
         return openspace_regions
+
+    def filter_openspace_regions(self, regions: List[geo.Curve]) -> List[geo.Curve]:
+        """공개공지 영역 필터링"""
+        filtered_regions = []
+        for region in regions:
+            # 공개공지 최소 조건을 만족하는지 확인
+            if not region.IsValid:
+                continue
+            if geo.AreaMassProperties.Compute(region).Area < self.requirement.MIN_AREA:
+                continue
+            filtered_regions.append(region)
+
+        return filtered_regions
 
     def get_candidate_regions(self) -> List[geo.Curve]:
         """공개공지 최소 조건을 만족하는 영역 생성"""

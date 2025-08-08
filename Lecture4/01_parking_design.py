@@ -23,11 +23,10 @@ TOL = 0.01  # 허용 오차
 # entrance_pt = geo.Point3d()
 
 
-def get_axis_from_region(region: geo.Curve, entrance_pt: geo.Point3d) -> geo.Plane:
+def get_axis_from_region(region: geo.Curve) -> geo.Plane:
     """
     주차장 영역의 방향성을 파악하기위한 축 생성
     :param region: 주차장 영역 (PolylineCurve)
-    :param entrance_pt: 진입점 (Point3d)
     :return: 축 (Plane)
     """
     # 모든 변을 기준으로 바운딩 박스를 생성하여 최소 바운딩 박스를 구하여 해당 변을 축으로 설정
@@ -77,7 +76,6 @@ def get_cells_from_inside_region(region: geo.Curve, axis: geo.Plane) -> List[geo
     """
     내부 영역에서 셀을 생성
     :param region: 내부 영역 (PolylineCurve)
-    :param axis: 축 (Plane)
     :return: 셀 리스트 (list of PolylineCurve)
     """
     bbox_region = utils.get_bounding_box_crv(region, axis)
@@ -85,9 +83,7 @@ def get_cells_from_inside_region(region: geo.Curve, axis: geo.Plane) -> List[geo
     bbox_segs = sorted(bbox_segs, key=lambda seg: seg.GetLength())
     short_seg, long_seg = bbox_segs[0], bbox_segs[-1]
 
-    sc.sticky["segs"] = short_seg, long_seg, bbox_segs, region
-
-    vec = utils.get_outside_perp_vec_from_pt(short_seg.PointAt(0.5), bbox_region)
+    vec = -utils.get_outside_perp_vec_from_pt(short_seg.PointAt(0.5), bbox_region)
     length_to_move = 0
     cells = []
     pattern = generate_pattern_list(long_seg.GetLength())
@@ -100,19 +96,33 @@ def get_cells_from_inside_region(region: geo.Curve, axis: geo.Plane) -> List[geo
     return cells
 
 
-def get_cells_from_inside_regions(
-    regions: List[geo.Curve], axis: geo.Plane
+def get_cells_from_inside(
+    target_region: geo.Curve,
 ) -> List[geo.Curve]:
     """
     내부 영역에서 셀을 생성
-    :param regions: 내부 영역 리스트 (PolylineCurve)
-    :param axis: 축 (Plane)
+    :param target_region: 전체 영역 (PolylineCurve)
     :return: 셀 리스트 (list of PolylineCurve)
     """
 
+    # 1. 축 생성
+    axis = get_axis_from_region(target_region)
+
+    # 2. 전체 영역을 CELL_LENGTH + ROAD_WIDTH 만큼 안쪽으로 offset
+    inside_regions = utils.offset_regions_inward(
+        target_region, CELL_LENGTH + ROAD_WIDTH
+    )
+
+    if not inside_regions:
+        return []
+
+    # 3. 내부 영역에서 셀 생성
     cells = []
-    for region in regions:
+    for region in inside_regions:
         cells.extend(get_cells_from_inside_region(region, axis))
+
+    # 4. 내부 영역을 벗어난 셀 필터링
+    cells = filter_cells_inside_region(cells, inside_regions)
 
     return cells
 
@@ -164,17 +174,20 @@ def get_cells_from_segement(segment: geo.Curve, vec: geo.Vector3d) -> List[geo.C
     return cells
 
 
-def get_cells_from_outside_regions(
-    outside_region: geo.Curve,
+def get_cells_from_outside(
+    target_region: geo.Curve,
+    entrance_pt: geo.Point3d,
 ) -> List[geo.Curve]:
     """
-    외부 영역에서 셀을 생성
-    :param outside_region: 외부 영역 (PolylineCurve)
+    주차 가능 영역의 외각을 둘러싸는 셀을 생성
+    :param target_region: 외부 영역 (PolylineCurve)
     :return: 셀 리스트 (list of PolylineCurve)
     """
+    # 1. 주차가능 영역의 외부영역을 주차칸의 길이 + 도로폭 만큼 안쪽으로 offset
     cells = []
-    offset_regions = utils.offset_regions_inward(outside_region, CELL_LENGTH)
+    offset_regions = utils.offset_regions_inward(target_region, CELL_LENGTH)
 
+    # 2. offset된 영역의 세그먼트를 기준으로 셀 생성
     for offset_region in offset_regions:
         for segment in utils.explode_curve(offset_region):
             # segment를 기준으로 배치가능한 최대 셀 개수 측정
@@ -184,62 +197,58 @@ def get_cells_from_outside_regions(
                 continue
             # segment를 기준으로 셀 생성
             center_pt = segment.PointAt(0.5)
-            cell_vec = utils.get_outside_perp_vec_from_pt(center_pt, segment)
+            cell_vec = utils.get_outside_perp_vec_from_pt(center_pt, offset_region)
             cells_from_seg = get_cells_from_segement(segment, cell_vec)
 
             cells.extend(cells_from_seg)
 
+    # 3. 진입로 확보를 위한 셀 필터링
+    cells = filter_cells_at_entrance(cells, entrance_pt, target_region)
+
     return cells
 
 
-def filter_cells_by_region(
-    inside_cells: List[geo.Curve],
-    outside_cells: List[geo.Curve],
-    inside_regions: List[geo.Curve],
-    outside_region: geo.Curve,
+def filter_cells_at_entrance(
+    cells: List[geo.Curve],
     entrance_pt: geo.Point3d,
+    target_region: geo.Curve,
 ) -> List[geo.Curve]:
-    """
-    셀을 주어진 영역과 내부 영역에 맞게 필터링
+    """진입로 확보를 위한 셀 필터링
     :param cells: 셀 리스트 (list of PolylineCurve)
-    :param region: 전체 영역 (PolylineCurve)
-    :param inside_regions: 내부 영역 리스트 (list of PolylineCurve)
     :param entrance_pt: 진입점 (Point3d)
+    :param target_region: 전체 영역 (PolylineCurve)
     :return: 필터링된 셀 리스트 (list of PolylineCurve)
     """
     filtered_cells = []
-    for cell in outside_cells:
+    for cell in cells:
         # entrance_pt와의 거리가 2.5M 이하인 셀 제거
-        pt_on_region = outside_region.PointAt(
-            outside_region.ClosestPoint(entrance_pt)[1]
-        )
-        if utils.get_dist_between_pt_and_crv(pt_on_region, cell) > 2.5:
-            filtered_cells.append(cell)
-
-    for cell in inside_cells:
-        # 내부셀 영역 외에 있는 셀 제거
-        if any(utils.is_region_inside_region(cell, ir) for ir in inside_regions):
+        pt_on_region = target_region.PointAt(target_region.ClosestPoint(entrance_pt)[1])
+        if utils.get_dist_between_pt_and_crv(pt_on_region, cell) > CELL_WIDTH:
             filtered_cells.append(cell)
 
     return filtered_cells
 
 
-# 1. 축 생성
-axis = get_axis_from_region(target_region, entrance_pt)
+def filter_cells_inside_region(
+    cells: List[geo.Curve], inside_regions: List[geo.Curve]
+) -> List[geo.Curve]:
+    """내부 영역에 맞게 셀 필터링
+    :param cells: 셀 리스트 (list of PolylineCurve)
+    :param inside_regions: 내부 영역 리스트 (list of PolylineCurve)
+    :return: 필터링된 셀 리스트 (list of PolylineCurve)
+    """
+    filtered_cells = []
+    for cell in cells:
+        if any(utils.is_region_inside_region(cell, ir) for ir in inside_regions):
+            filtered_cells.append(cell)
+    return filtered_cells
 
-# 2. 전체 영역을 CELL_LENGTH + ROAD_WIDTH 만큼 안쪽으로 offset
-inside_regions = utils.offset_regions_inward(target_region, CELL_LENGTH + ROAD_WIDTH)
 
-if not inside_regions:
-    raise Exception("Offset failed. 해당 알고리즘으로 탐색하기엔 작은 영역")
+# 1. 외부 영역에서 셀 생성
+cells_from_outside = get_cells_from_outside(target_region, entrance_pt)
 
-# 3. 외부 영역에서 셀 생성
-cells_from_outside = get_cells_from_outside_regions(target_region)
-
-# 4. 내부 영역에서 셀 생성
-cells_from_inside = get_cells_from_inside_regions(inside_regions, axis)
+# 2. 내부 영역에서 셀 생성
+cells_from_inside = get_cells_from_inside(target_region)
 
 # 최종 셀 리스트 생성
-cells = filter_cells_by_region(
-    cells_from_inside, cells_from_outside, inside_regions, target_region, entrance_pt
-)
+cells = cells_from_outside + cells_from_inside
